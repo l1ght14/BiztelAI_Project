@@ -28,7 +28,7 @@ This project processes BiztelAI data and provides a FastAPI-based REST API for i
    git clone https://github.com/l1ght14/BiztelAI_Project.git
    cd BiztelAI_Project
 
-## 🌍 Deployment
+##  Deployment
 The API is deployed and accessible publicly.
 
 ### Deployment URL:

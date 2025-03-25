@@ -2,7 +2,7 @@ import cProfile
 import pstats
 import io
 import uvicorn
-from api import app  # Import FastAPI app
+from api import app  
 
 def profile_server():
     """Profiles FastAPI server performance."""
@@ -14,7 +14,7 @@ def profile_server():
     profiler.disable()
     stream = io.StringIO()
     stats = pstats.Stats(profiler, stream=stream).sort_stats("cumulative")
-    stats.print_stats(20)  # Show top 20 slowest functions
+    stats.print_stats(20) 
     
     with open("api_profile.txt", "w") as f:
         f.write(stream.getvalue())

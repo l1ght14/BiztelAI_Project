@@ -10,33 +10,35 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
-# API Key for authentication
-API_KEY = "my_secure_api_key"  # Change this to a secure key
+API_KEY = os.getenv("API_KEY", "default_fallback_key")
 
-# Function to validate API key (optional for testing)
+
+API_KEY = "2db61b79ba7339b6a4f44cd740fdd4c6b27ddade94b8fe504495e21c7b07d761"  
+
+# Function to validate API key 
 def verify_api_key(x_api_key: Optional[str] = Header(None)):
-    print("Received x-api-key:", x_api_key)  # Debugging line
+    print("Received x-api-key:", x_api_key)  
     if x_api_key is None:
-        raise HTTPException(status_code=403, detail="❌ Missing API Key. Please provide `x-api-key` in headers.")
+        raise HTTPException(status_code=403, detail=" Missing API Key. Please provide `x-api-key` in headers.")
     if x_api_key != API_KEY:
-        raise HTTPException(status_code=403, detail="❌ Invalid API Key")
+        raise HTTPException(status_code=403, detail=" Invalid API Key")
 
 
 # Initialize FastAPI app
 app = FastAPI(title="Secure BiztelAI API")
 
-# 🚀 Step 1: Get Full Path to CSV File
+#  Step 1: Get Full Path to CSV File
 FILE_PATH = os.path.abspath("cleaned_dataset_OOP.csv")
 
-# 🚀 Step 2: Load Data Asynchronously
+#  Step 2: Load Data Asynchronously
 def load_data_async():
     if not os.path.exists(FILE_PATH):
-        raise FileNotFoundError(f"❌ CSV file not found: {FILE_PATH}")
+        raise FileNotFoundError(f" CSV file not found: {FILE_PATH}")
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future = executor.submit(pd.read_csv, FILE_PATH)
         return future.result()
 
-# 🚀 Step 3: Secure Summary API
+#  Step 3: Secure Summary API
 @app.get("/summary")
 async def get_summary(api_key: Optional[str] = Depends(verify_api_key)):
     """Returns dataset summary securely."""
@@ -44,7 +46,7 @@ async def get_summary(api_key: Optional[str] = Depends(verify_api_key)):
     summary = df['agent'].value_counts().to_dict()
     return {"message_count_per_agent": summary}
 
-# 🚀 Step 4: Secure Preprocessing API
+#  Step 4: Secure Preprocessing API
 class TextInput(BaseModel):
     text: str
 
@@ -64,7 +66,7 @@ async def preprocess_input(data: TextInput, api_key: Optional[str] = Depends(ver
     processed_text = preprocess_text(data.text)
     return {"original_text": data.text, "processed_text": processed_text}
 
-# 🚀 Step 5: Secure Insights API
+#  Step 5: Secure Insights API
 class TranscriptInput(BaseModel):
     transcript_id: str
 
@@ -87,7 +89,7 @@ async def get_insights(data: TranscriptInput, api_key: Optional[str] = Depends(v
         "sentiment_summary": sentiment_summary
     }
 
-# 🚀 Step 6: Root Endpoint (Unprotected)
+#  Step 6: Root Endpoint (Unprotected)
 @app.get("/")
 def home():
     return {"message": "Welcome to the Secure BiztelAI API!"}
