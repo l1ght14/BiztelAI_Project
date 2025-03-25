@@ -10,7 +10,7 @@ from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
-API_KEY = os.getenv("API_KEY", "default_fallback_key")
+
 
 
 API_KEY = "2db61b79ba7339b6a4f44cd740fdd4c6b27ddade94b8fe504495e21c7b07d761"  
@@ -22,7 +22,7 @@ def verify_api_key(x_api_key: Optional[str] = Header(None)):
         raise HTTPException(status_code=403, detail=" Missing API Key. Please provide `x-api-key` in headers.")
     if x_api_key != API_KEY:
         raise HTTPException(status_code=403, detail=" Invalid API Key")
-
+    return x_api_key
 
 # Initialize FastAPI app
 app = FastAPI(title="Secure BiztelAI API")
