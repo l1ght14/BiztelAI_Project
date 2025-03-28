@@ -1,14 +1,17 @@
 # Use the official Python image
-FROM python:3.9
+FROM python:3.10-slim
 
 # Set the working directory inside the container
 WORKDIR /app
 
+# Copy requirements.txt before copying everything else (improves caching)
+COPY requirements.txt .
+
+# Install required Python packages (including torch)
+RUN pip install --no-cache-dir -r requirements.txt
+
 # Copy all project files into the container
 COPY . .
-
-# Install required Python packages
-RUN pip install --no-cache-dir fastapi uvicorn pandas nltk
 
 # Download NLTK resources inside the container
 RUN python -c "import nltk; nltk.download('punkt'); nltk.download('stopwords'); nltk.download('wordnet')"

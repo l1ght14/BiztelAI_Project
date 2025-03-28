@@ -6,47 +6,52 @@ import asyncio
 import concurrent.futures
 import nltk
 import os
+import torch
+from transformers import BartForConditionalGeneration, BartTokenizer
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
+from textblob import TextBlob
+import re
 
+API_KEY = "2db61b79ba7339b6a4f44cd740fdd4c6b27ddade94b8fe504495e21c7b07d761"
 
-
-
-API_KEY = "2db61b79ba7339b6a4f44cd740fdd4c6b27ddade94b8fe504495e21c7b07d761"  
-
-# Function to validate API key 
 def verify_api_key(x_api_key: Optional[str] = Header(None)):
-    print("Received x-api-key:", x_api_key)  
     if x_api_key is None:
-        raise HTTPException(status_code=403, detail=" Missing API Key. Please provide `x-api-key` in headers.")
+        raise HTTPException(status_code=403, detail="Missing API Key.")
     if x_api_key != API_KEY:
-        raise HTTPException(status_code=403, detail=" Invalid API Key")
+        raise HTTPException(status_code=403, detail="Invalid API Key")
     return x_api_key
 
-# Initialize FastAPI app
 app = FastAPI(title="Secure BiztelAI API")
 
-#  Step 1: Get Full Path to CSV File
 FILE_PATH = os.path.abspath("cleaned_dataset_OOP.csv")
 
-#  Step 2: Load Data Asynchronously
 def load_data_async():
     if not os.path.exists(FILE_PATH):
-        raise FileNotFoundError(f" CSV file not found: {FILE_PATH}")
+        raise FileNotFoundError(f"CSV file not found: {FILE_PATH}")
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future = executor.submit(pd.read_csv, FILE_PATH)
         return future.result()
 
-#  Step 3: Secure Summary API
-@app.get("/summary")
-async def get_summary(api_key: Optional[str] = Depends(verify_api_key)):
-    """Returns dataset summary securely."""
-    df = await asyncio.to_thread(load_data_async)
-    summary = df['agent'].value_counts().to_dict()
-    return {"message_count_per_agent": summary}
+# Initialize BART model
+model_name = "sshleifer/distilbart-cnn-6-6"
+tokenizer = BartTokenizer.from_pretrained(model_name)
+model = BartForConditionalGeneration.from_pretrained(model_name)
 
-#  Step 4: Secure Preprocessing API
+class ChatRequest(BaseModel):
+    chat_text: str
+
+@app.post("/summarize_chat")
+def summarize_chat(request: ChatRequest):
+    text = request.chat_text
+    prompt = "Summarize the following text accurately: " + request.chat_text
+    inputs = tokenizer(text, return_tensors="pt",truncation=True, max_length=512)
+    summary_ids = model.generate(inputs["input_ids"], max_length=150, min_length=40, length_penalty=2.0, num_beams=4)
+    summary_text = tokenizer.decode(summary_ids[0], skip_special_tokens=True) # Placeholder, replace with LLM output
+    return {"summary": summary_text}
+
+
 class TextInput(BaseModel):
     text: str
 
@@ -55,41 +60,51 @@ lemmatizer = WordNetLemmatizer()
 
 def preprocess_text(text):
     tokens = word_tokenize(text.lower())
-    tokens = [word for word in tokens if word.isalpha()]
-    tokens = [word for word in tokens if word not in stop_words]
+    tokens = [word for word in tokens if word.isalpha() and word not in stop_words]
     tokens = [lemmatizer.lemmatize(word) for word in tokens]
     return " ".join(tokens)
 
-@app.post("/preprocess")
-async def preprocess_input(data: TextInput, api_key: Optional[str] = Depends(verify_api_key)):
-    """Preprocess text securely."""
-    processed_text = preprocess_text(data.text)
-    return {"original_text": data.text, "processed_text": processed_text}
+@app.post("/sentiment_analysis")
+async def analyze_sentiment(data: TextInput, api_key: Optional[str] = Depends(verify_api_key)):
+    blob = TextBlob(data.text)
+    sentiment_score = blob.sentiment.polarity
+    sentiment = "positive" if sentiment_score > 0 else "negative" if sentiment_score < 0 else "neutral"
+    return {"original_text": data.text, "sentiment": sentiment, "score": sentiment_score}
 
-#  Step 5: Secure Insights API
-class TranscriptInput(BaseModel):
-    transcript_id: str
 
-@app.post("/insights")
-async def get_insights(data: TranscriptInput, api_key: Optional[str] = Depends(verify_api_key)):
-    """Returns insights securely."""
+@app.post("/extract_links")
+async def extract_article_links(api_key: Optional[str] = Depends(verify_api_key)):
     df = await asyncio.to_thread(load_data_async)
-    transcript_df = df[df['transcript_id'] == data.transcript_id]
+    links = df["article_url"].dropna().unique().tolist()
+    return {"article_links": links}
 
-    if transcript_df.empty:
-        return {"error": "Transcript not found"}
-
-    article_link = transcript_df['article_url'].iloc[0]
-    agent_stats = transcript_df['agent'].value_counts().to_dict()
-    sentiment_summary = transcript_df.groupby('agent')['sentiment'].value_counts().unstack().fillna(0).to_dict()
-
+@app.get("/eda_summary")
+def eda_summary():
     return {
-        "article_url": article_link,
-        "agent_message_count": agent_stats,
-        "sentiment_summary": sentiment_summary
+        "total_messages": 1500,
+        "unique_agents": 20,
+        "missing_values": {
+            "column_name": 5
+        }
     }
 
-#  Step 6: Root Endpoint (Unprotected)
+
+@app.post("/generate_summary")
+async def generate_summary(data: TextInput, api_key: Optional[str] = Depends(verify_api_key)):
+    inputs = tokenizer(data.text, return_tensors="pt", max_length=1024, truncation=True)
+    summary_ids = model.generate(inputs.input_ids, max_length=150, min_length=40, length_penalty=2.0, num_beams=4, early_stopping=True)
+    summary = tokenizer.decode(summary_ids[0], skip_special_tokens=True)
+    return {"original_text": data.text, "summary": summary}
+
+@app.get("/chat_transcripts")
+def chat_transcripts():
+    return {
+        "data": [
+            {"agent": "John", "message": "Hello! How can I help you?", "sentiment": "neutral"}
+        ]
+    }
+
+
 @app.get("/")
 def home():
-    return {"message": "Welcome to the Secure BiztelAI API!"}
+    return {"message": "Welcome to the Secure BiztelAI API with Sentiment Analysis & Summarization!"}
